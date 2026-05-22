@@ -456,7 +456,7 @@ fn write_secret_file_blocking(path: &std::path::Path, content: &str) -> anyhow::
             .with_context(|| format!("failed to chmod {}", path.display()))?;
         file.write_all(content.as_bytes())
             .with_context(|| format!("failed to write {}", path.display()))?;
-        return Ok(());
+        Ok(())
     }
 
     #[cfg(not(unix))]
