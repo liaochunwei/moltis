@@ -1,6 +1,7 @@
 use {
     super::{ProviderRegistry, registration::openai_builtin_capabilities},
     crate::openai::ResponsesWebSocketPolicy,
+    anyhow::Context as _,
     moltis_agents::model::{ChatMessage, ToolCall},
     moltis_config::schema::{ProviderEntry, ProvidersConfig},
     secrecy::Secret,
@@ -31,49 +32,57 @@ fn openai_custom_base_url_disables_responses_websocket() {
     );
 }
 
-fn capture_one_json_request() -> (String, mpsc::Receiver<Value>) {
-    let listener = TcpListener::bind("127.0.0.1:0").expect("bind test server");
-    let base_url = format!("http://{}", listener.local_addr().expect("local addr"));
+fn capture_one_json_request() -> anyhow::Result<(String, mpsc::Receiver<anyhow::Result<Value>>)> {
+    let listener = TcpListener::bind("127.0.0.1:0").context("bind test server")?;
+    let base_url = format!("http://{}", listener.local_addr().context("local addr")?);
     let (tx, rx) = mpsc::sync_channel(1);
     std::thread::spawn(move || {
-        let (mut stream, _) = listener.accept().expect("accept request");
-        let mut buffer = Vec::new();
-        let mut chunk = [0_u8; 4096];
-        let content_length = loop {
-            let read = stream.read(&mut chunk).expect("read request");
-            buffer.extend_from_slice(&chunk[..read]);
-            let headers = String::from_utf8_lossy(&buffer);
-            if let Some((head, _)) = headers.split_once("\r\n\r\n") {
-                break head
-                    .lines()
-                    .find_map(|line| {
-                        let (name, value) = line.split_once(':')?;
-                        name.eq_ignore_ascii_case("content-length")
-                            .then_some(value.trim())
-                    })
-                    .and_then(|value| value.parse::<usize>().ok())
-                    .expect("content length");
+        let result = (|| -> anyhow::Result<Value> {
+            let (mut stream, _) = listener.accept().context("accept request")?;
+            let mut buffer = Vec::new();
+            let mut chunk = [0_u8; 4096];
+            let content_length = loop {
+                let read = stream.read(&mut chunk).context("read request")?;
+                anyhow::ensure!(
+                    read > 0,
+                    "connection closed before request headers completed"
+                );
+                buffer.extend_from_slice(&chunk[..read]);
+                let headers = String::from_utf8_lossy(&buffer);
+                if let Some((head, _)) = headers.split_once("\r\n\r\n") {
+                    break head
+                        .lines()
+                        .find_map(|line| {
+                            let (name, value) = line.split_once(':')?;
+                            name.eq_ignore_ascii_case("content-length")
+                                .then_some(value.trim())
+                        })
+                        .and_then(|value| value.parse::<usize>().ok())
+                        .context("content length")?;
+                }
+            };
+            let body_start = buffer
+                .windows(4)
+                .position(|w| w == b"\r\n\r\n")
+                .context("body")?
+                + 4;
+            while buffer.len() - body_start < content_length {
+                let read = stream.read(&mut chunk).context("read body")?;
+                anyhow::ensure!(read > 0, "connection closed before request body completed");
+                buffer.extend_from_slice(&chunk[..read]);
             }
-        };
-        let body_start = buffer
-            .windows(4)
-            .position(|w| w == b"\r\n\r\n")
-            .expect("body")
-            + 4;
-        while buffer.len() - body_start < content_length {
-            let read = stream.read(&mut chunk).expect("read body");
-            buffer.extend_from_slice(&chunk[..read]);
-        }
-        let body = &buffer[body_start..body_start + content_length];
-        tx.send(serde_json::from_slice(body).expect("json body"))
-            .expect("send body");
-        stream.write_all(b"HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: 53\r\n\r\n{\"choices\":[{\"message\":{\"content\":\"ok\"}}],\"usage\":{}}").expect("write response");
+            let body = &buffer[body_start..body_start + content_length];
+            let value = serde_json::from_slice(body).context("json body")?;
+            stream.write_all(b"HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: 53\r\n\r\n{\"choices\":[{\"message\":{\"content\":\"ok\"}}],\"usage\":{}}").context("write response")?;
+            Ok(value)
+        })();
+        let _ = tx.send(result);
     });
-    (base_url, rx)
+    Ok((base_url, rx))
 }
 
-async fn capture_fireworks_kimi_request(strict_tools: Option<bool>) -> Value {
-    let (base_url, body_rx) = capture_one_json_request();
+async fn capture_fireworks_kimi_request(strict_tools: Option<bool>) -> anyhow::Result<Value> {
+    let (base_url, body_rx) = capture_one_json_request()?;
     let mut config = ProvidersConfig {
         offered: vec!["fireworks".into()],
         ..ProvidersConfig::default()
@@ -90,7 +99,7 @@ async fn capture_fireworks_kimi_request(strict_tools: Option<bool>) -> Value {
     registry.register_openai_compatible_providers(&config, &HashMap::new(), &HashMap::new());
     let provider = registry
         .get(&format!("fireworks::{FIREWORKS_KIMI_ROUTER}"))
-        .expect("registered Fireworks Kimi router model");
+        .context("registered Fireworks Kimi router model")?;
     provider
         .complete(
             &[
@@ -117,14 +126,18 @@ async fn capture_fireworks_kimi_request(strict_tools: Option<bool>) -> Value {
             })],
         )
         .await
-        .expect("completion succeeds");
+        .context("completion succeeds")?;
 
-    body_rx.recv().expect("captured request body")
+    body_rx
+        .recv()
+        .context("captured request body")?
+        .context("test server captured request body")
 }
 
 #[tokio::test]
-async fn initial_openai_compat_registration_applies_provider_rewrite_quirks() {
-    let (base_url, body_rx) = capture_one_json_request();
+async fn initial_openai_compat_registration_applies_provider_rewrite_quirks() -> anyhow::Result<()>
+{
+    let (base_url, body_rx) = capture_one_json_request()?;
     let mut config = ProvidersConfig {
         offered: vec!["minimax".into()],
         ..ProvidersConfig::default()
@@ -140,7 +153,7 @@ async fn initial_openai_compat_registration_applies_provider_rewrite_quirks() {
     registry.register_openai_compatible_providers(&config, &HashMap::new(), &HashMap::new());
     let provider = registry
         .get("minimax::MiniMax-M2.7")
-        .expect("registered minimax model");
+        .context("registered minimax model")?;
     provider
         .complete(
             &[
@@ -150,10 +163,13 @@ async fn initial_openai_compat_registration_applies_provider_rewrite_quirks() {
             &[],
         )
         .await
-        .expect("completion succeeds");
+        .context("completion succeeds")?;
 
-    let body = body_rx.recv().expect("captured request body");
-    let messages = body["messages"].as_array().expect("messages array");
+    let body = body_rx
+        .recv()
+        .context("captured request body")?
+        .context("test server captured request body")?;
+    let messages = body["messages"].as_array().context("messages array")?;
     assert_eq!(messages.len(), 1);
     assert_eq!(messages[0]["role"], "user");
     assert!(messages[0].get("name").is_none());
@@ -161,24 +177,28 @@ async fn initial_openai_compat_registration_applies_provider_rewrite_quirks() {
         messages[0]["content"],
         "[System Instructions]\nsys\n[End System Instructions]\n\nhello"
     );
+    Ok(())
 }
 
 #[tokio::test]
-async fn initial_fireworks_kimi_router_registration_applies_model_scoped_quirks() {
-    let body = capture_fireworks_kimi_request(None).await;
+async fn initial_fireworks_kimi_router_registration_applies_model_scoped_quirks()
+-> anyhow::Result<()> {
+    let body = capture_fireworks_kimi_request(None).await?;
 
     assert_eq!(body["tools"][0]["function"]["strict"], false);
-    let messages = body["messages"].as_array().expect("messages array");
+    let messages = body["messages"].as_array().context("messages array")?;
     let assistant_tool_message = messages
         .iter()
         .find(|message| message.get("tool_calls").is_some())
-        .expect("assistant tool-call message");
+        .context("assistant tool-call message")?;
     assert_eq!(assistant_tool_message["reasoning_content"], "need weather");
+    Ok(())
 }
 
 #[tokio::test]
-async fn explicit_strict_tools_overrides_fireworks_kimi_router_default() {
-    let body = capture_fireworks_kimi_request(Some(true)).await;
+async fn explicit_strict_tools_overrides_fireworks_kimi_router_default() -> anyhow::Result<()> {
+    let body = capture_fireworks_kimi_request(Some(true)).await?;
 
     assert_eq!(body["tools"][0]["function"]["strict"], true);
+    Ok(())
 }
