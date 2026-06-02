@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## [20260602.05] - 2026-06-02
+### Fixed
+- [providers] Restore Gemini tool signature replay
+
 ## [20260602.04] - 2026-06-02
 ### Fixed
 - [providers] Default Alibaba Coding live test endpoint
