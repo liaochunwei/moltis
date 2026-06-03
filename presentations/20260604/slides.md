@@ -288,6 +288,70 @@ docs, auth, CI, and release work in a way that used to take much longer."
 -->
 ---
 
+# Rewrites are no longer sacred
+
+<div class="mt-2 text-xl leading-8 text-gray-600">
+  The cost of generating code is collapsing. The cost that remains is deciding, verifying, and maintaining it.
+</div>
+
+<div class="mt-4 flex items-center gap-3">
+  <div class="inline-flex rounded-full border border-gray-200 bg-white px-4 py-2 text-base font-semibold text-gray-700">
+    Bun: Zig → Rust
+  </div>
+  <div class="inline-flex rounded-full border border-cyan-200 bg-cyan-50 px-4 py-2 text-base font-semibold text-cyan-800">
+    first → last commit: 9d 18h
+  </div>
+</div>
+
+<div class="mt-4 grid grid-cols-3 gap-4">
+  <div class="rounded-2xl border border-gray-200 bg-white px-5 py-3">
+    <div class="text-xs uppercase tracking-[0.18em] text-gray-500">Bun PR #30412</div>
+    <div class="mt-2 text-4xl font-semibold text-gray-950">6,755</div>
+    <div class="mt-2 text-sm leading-6 text-gray-700">commits merged into main for the Zig → Rust rewrite.</div>
+  </div>
+  <div class="rounded-2xl border border-gray-200 bg-white px-5 py-3">
+    <div class="text-xs uppercase tracking-[0.18em] text-gray-500">Bun PR #30412</div>
+    <div class="mt-2 text-4xl font-semibold text-gray-950">1M</div>
+    <div class="mt-2 text-sm leading-6 text-gray-700">lines rewritten across 2,188 changed files.</div>
+  </div>
+  <div class="rounded-2xl border border-cyan-200 bg-cyan-50 px-5 py-3">
+    <div class="text-xs uppercase tracking-[0.18em] text-cyan-700">Test suite</div>
+    <div class="mt-2 text-4xl font-semibold text-gray-950">99.8%</div>
+    <div class="mt-2 text-sm leading-6 text-gray-700">of Bun's pre-existing tests reportedly passing.</div>
+  </div>
+</div>
+
+<div class="mt-4 rounded-2xl border border-cyan-200 bg-cyan-50 px-6 py-3 text-base leading-6 text-gray-700">
+  Jarred Sumner wrote that the port fixed memory leaks and flaky tests, and gave Bun compiler-assisted tools for memory bugs that had cost enormous debugging time.
+</div>
+
+<div class="mt-4 rounded-2xl border border-fuchsia-200 bg-fuchsia-50 px-6 py-3 text-lg leading-7">
+  When code is cheap, rewriting becomes a product decision, not an engineering impossibility.
+</div>
+
+<!--
+About 45 seconds.
+
+Sources:
+- https://github.com/oven-sh/bun/pull/30412
+- https://www.heise.de/en/news/AI-Porting-Claude-Rewrites-Bun-Codebase-in-Rust-11294318.html
+
+Commit graph checked with `git fetch --filter=blob:none` from oven-sh/bun:
+- 6,755 commits in PR diff from base 0d9b296af33f2b851fcbf4df3e9ec89751734ba4 to head ed1a70f81708d7d137de8de057d11668c5f4e220
+- first commit: 2026-05-04T13:20:04Z
+- last commit: 2026-05-14T00:23:14-07:00 / 2026-05-14T07:23:14Z
+- duration: 9 days, 18 hours, 3 minutes
+
+PR wording from Jarred Sumner:
+"It passes Bun's pre-existing test suite on all platforms (and fixes several memory leaks and flaky tests) ... most importantly, we now have compiler-assisted tools for catching & preventing memory bugs, which have costed the team an enormous amount of development & debugging time over the years."
+
+Use this carefully:
+- The astonishing point is not that AI made a perfect rewrite.
+- The point is that a rewrite of this size became thinkable, testable, and mergeable on a timescale that would have sounded absurd a few years ago.
+- The cost did not disappear; it moved from typing code to validation, migration, and ownership.
+-->
+---
+
 # My actual workflow
 
 <div class="mt-7 grid grid-cols-2 gap-6">
@@ -766,8 +830,12 @@ eventually people who own areas deeply.
   <div>8. Let users, not demos, judge progress</div>
 </div>
 
-<div class="mt-10 rounded-2xl border border-cyan-300 bg-cyan-50 px-6 py-5 text-xl leading-8">
+<div class="mt-8 rounded-2xl border border-cyan-300 bg-cyan-50 px-6 py-4 text-xl leading-8">
   If you cannot tell whether the result is good, slow down. The tool is not the adult in the room.
+</div>
+
+<div class="mt-4 rounded-2xl border border-fuchsia-200 bg-fuchsia-50 px-6 py-3 text-base leading-6 text-gray-700">
+  AI is great for builders, but it also exposes the next bottlenecks: good ideas, distribution, taste, and stamina. Coding was never the only hard part.
 </div>
 
 <!--
@@ -783,6 +851,13 @@ Expand any two:
 
 For the NFC audience, mention that if your product touches wallets, identity,
 payments, or private communities, the cost of careless AI use is much higher.
+
+Optional aside:
+"For years, non-coders said coders were lucky because we could turn ideas into
+software. Now more people can do that, and many will discover the bottleneck was
+not only code. It is distribution, judgment, product taste, and whether you can
+keep going without burning out. AI is amazing for builders, but it also changes
+the emotional relationship with coding for people who loved doing it by hand."
 -->
 ---
 
